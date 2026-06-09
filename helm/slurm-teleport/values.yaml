@@ -1,0 +1,58 @@
+clusterName: slurm1
+
+teleport:
+  proxyAddr: "host:443"
+  tokenName: "slurm-user-login"
+  dataVolumeSize: "1Gi"
+  storageClassName: ""
+  operator:
+    namespace: teleport-operator
+    userRole: slurm-user
+
+images:
+  loginTeleport:
+    repository: ashestakovdev/login_teleport
+    tag: "test"
+    pullPolicy: IfNotPresent
+
+  munge:
+    repository: cr.eu-north1.nebius.cloud/soperator/munge
+    tag: "4.0.1-slurm25.11.3"
+    pullPolicy: IfNotPresent
+
+mungeSecretName: "slurm1-munge"
+jailPVCName: "slurm1-jail-pvc"
+slurmScriptsConfigMapName: "slurm-scripts"
+
+tolerations:
+  - key: node-role.kubernetes.io/worker-infra
+    operator: Exists
+    effect: NoSchedule
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "512Mi"
+    ephemeral-storage: "1G"
+  limits:
+    memory: "512Mi"
+    ephemeral-storage: "1G"
+
+mungeResources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+    ephemeral-storage: "500Mi"
+  limits:
+    memory: "128Mi"
+    ephemeral-storage: "500Mi"
+
+inMemorySizeLimit: "512Mi"
+
+imagePullSecrets: []
+
+env: []
+
+users: []
+
+# sudo soperator-createuser <username> --without-external-ssh
