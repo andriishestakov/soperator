@@ -109,6 +109,11 @@ func RenderMariaDb(
 			},
 			Metrics: &mariadbv1alpha1.MariadbMetrics{
 				Enabled: mariaDb.Metrics.Enabled,
+				Exporter: mariadbv1alpha1.Exporter{
+					Affinity:     getAffinityConfig(nodeFilter.Affinity, ptr.To(false)),
+					NodeSelector: nodeFilter.NodeSelector,
+					Tolerations:  nodeFilter.Tolerations,
+				},
 			},
 			MyCnf: ptr.To(consts.MariaDbDefaultMyCnf),
 		},
