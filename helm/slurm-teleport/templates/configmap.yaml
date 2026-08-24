@@ -1,0 +1,35 @@
+{{- $root := . }}
+{{- range .Values.users }}
+{{- $username := .name }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $root.Values.clusterName }}-{{ $username }}-teleport-config
+  labels:
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    slurm-user: {{ $username }}
+    slurm-cluster: {{ $root.Values.clusterName }}
+data:
+  teleport.yaml: |
+    version: v3
+    teleport:
+      nodename: "{{ $root.Values.clusterName }}-{{ $username }}"
+      data_dir: /var/lib/teleport
+      log:
+        output: stderr
+        severity: INFO
+      join_params:
+        method: kubernetes
+        token_name: "{{ $root.Values.teleport.tokenName }}"
+      proxy_server: "{{ $root.Values.teleport.proxyAddr }}"
+    ssh_service:
+      enabled: true
+      labels:
+        slurm-cluster: "{{ $root.Values.clusterName }}"
+        slurm-user: "{{ $username }}"
+    auth_service:
+      enabled: false
+    proxy_service:
+      enabled: false
+{{- end }}
