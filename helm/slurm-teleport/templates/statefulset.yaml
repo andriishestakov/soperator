@@ -1,0 +1,145 @@
+{{- $root := . }}
+{{- range .Values.users }}
+{{- $username := .name }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $root.Values.clusterName }}-{{ $username }}-login
+  labels:
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    slurm-user: {{ $username }}
+    slurm-cluster: {{ $root.Values.clusterName }}
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    slurm-user: {{ $username }}
+    slurm-cluster: {{ $root.Values.clusterName }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $root.Values.clusterName }}-{{ $username }}-login
+  labels:
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    slurm-user: {{ $username }}
+    slurm-cluster: {{ $root.Values.clusterName }}
+spec:
+  replicas: 1
+  serviceName: {{ $root.Values.clusterName }}-{{ $username }}-login
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      slurm-user: {{ $username }}
+      slurm-cluster: {{ $root.Values.clusterName }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        slurm-user: {{ $username }}
+        slurm-cluster: {{ $root.Values.clusterName }}
+    spec:
+      serviceAccountName: {{ $root.Release.Name }}-sa
+      tolerations: {{ coalesce .tolerations $root.Values.tolerations | toYaml | nindent 8 }}
+      {{- with (coalesce .imagePullSecrets $root.Values.imagePullSecrets) }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: munge
+          image: {{ $root.Values.images.munge.repository }}:{{ $root.Values.images.munge.tag }}
+          imagePullPolicy: {{ $root.Values.images.munge.pullPolicy }}
+          restartPolicy: Always
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "/usr/bin/munge -n > /dev/null && exit 0 || exit 1"]
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 1
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "test -S /run/munge/munge.socket.2"]
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 1
+          resources: {{ toYaml (.mungeResources | default $root.Values.mungeResources) | nindent 12 }}
+          securityContext:
+            appArmorProfile:
+              type: Unconfined
+            capabilities:
+              add: ["SYS_ADMIN"]
+          volumeMounts:
+            - name: munge-key
+              mountPath: /mnt/munge-key
+              readOnly: true
+            - name: munge-socket
+              mountPath: /run/munge
+      containers:
+        - name: teleport
+          image: {{ (.image | default dict).repository | default $root.Values.images.loginTeleport.repository }}:{{ (.image | default dict).tag | default $root.Values.images.loginTeleport.tag }}
+          imagePullPolicy: {{ (.image | default dict).pullPolicy | default $root.Values.images.loginTeleport.pullPolicy }}
+          env: {{ toYaml (.env | default $root.Values.env) | nindent 12 }}
+          resources:
+            requests: {{ toYaml ((.resources | default dict).requests | default $root.Values.resources.requests) | nindent 14 }}
+            limits: {{ toYaml ((.resources | default dict).limits | default $root.Values.resources.limits) | nindent 14 }}
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+          volumeMounts:
+            - name: jail
+              mountPath: /mnt/jail
+            - name: munge-socket
+              mountPath: /run/munge
+            - name: in-memory
+              mountPath: /mnt/jail.upper/mnt/memory
+            - name: slurm-scripts
+              mountPath: /opt/slurm_scripts
+            - name: slurm-scripts-jail
+              mountPath: /mnt/jail.upper/opt/slurm_scripts
+            - name: teleport-data
+              mountPath: /var/lib/teleport
+            - name: teleport-config
+              mountPath: /etc/teleport.yaml
+              subPath: teleport.yaml
+      volumes:
+        - name: munge-key
+          secret:
+            secretName: {{ $root.Values.mungeSecretName }}
+            defaultMode: 0o420
+            items:
+              - key: munge.key
+                path: munge.key
+                mode: 0o400
+        - name: munge-socket
+          emptyDir: {}
+        - name: jail
+          persistentVolumeClaim:
+            claimName: {{ $root.Values.jailPVCName }}
+        - name: in-memory
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ coalesce .inMemorySizeLimit $root.Values.inMemorySizeLimit }}
+        - name: slurm-scripts
+          configMap:
+            name: {{ $root.Values.slurmScriptsConfigMapName }}
+            defaultMode: 0o755
+        - name: slurm-scripts-jail
+          configMap:
+            name: {{ $root.Values.slurmScriptsConfigMapName }}
+            defaultMode: 0o755
+        - name: teleport-config
+          configMap:
+            name: {{ $root.Values.clusterName }}-{{ $username }}-teleport-config
+  volumeClaimTemplates:
+    - metadata:
+        name: teleport-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $root.Values.teleport.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $root.Values.teleport.dataVolumeSize }}
+---
+{{- end }}

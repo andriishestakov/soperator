@@ -1,0 +1,14 @@
+{{- range .Values.users }}
+---
+apiVersion: resources.teleport.dev/v2
+kind: TeleportUser
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.teleport.operator.namespace }}
+spec:
+  roles:
+    - {{ $.Values.teleport.operator.userRole }}
+  traits:
+    logins:
+      - {{ .name }}
+{{- end }}

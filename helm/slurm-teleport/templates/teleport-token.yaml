@@ -1,0 +1,11 @@
+apiVersion: resources.teleport.dev/v2
+kind: TeleportProvisionToken
+metadata:
+  name: {{ .Values.teleport.tokenName }}
+  namespace: {{ .Values.teleport.operator.namespace }}
+spec:
+  roles: [Node]
+  join_method: kubernetes
+  kubernetes:
+    allow:
+      - service_account: {{ .Release.Namespace }}:{{ .Release.Name }}-sa

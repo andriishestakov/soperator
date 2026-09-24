@@ -1,0 +1,12 @@
+apiVersion: resources.teleport.dev/v6
+kind: TeleportRole
+metadata:
+  name: {{ .Values.teleport.operator.userRole }}
+  namespace: {{ .Values.teleport.operator.namespace }}
+spec:
+  allow:
+    logins:
+      - "{{`{{internal.logins}}`}}"
+    node_labels:
+      slurm-cluster: ["{{ .Values.clusterName }}"]
+      slurm-user: ["{{`{{internal.logins}}`}}"]
